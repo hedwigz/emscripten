@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "em_task_queue.h"
 #include "thread_mailbox.h"
@@ -34,6 +35,17 @@ static em_proxying_queue system_proxying_queue = {
   .size = 0,
   .capacity = 0,
 };
+
+typedef struct proxied_js_func_t {
+  int funcIndex;
+  void* emAsmAddr;
+  pthread_t callingThread;
+  int numArgs;
+  double* argBuffer;
+  double result;
+  bool owned;
+  em_proxying_ctx * ctx;
+} proxied_js_func_t;
 
 em_proxying_queue* emscripten_proxy_get_system_queue(void) {
   return &system_proxying_queue;
@@ -390,11 +402,39 @@ int emscripten_proxy_sync_with_ctx(em_proxying_queue* q,
   return ret;
 }
 
+int emscripten_proxy_promise_await_with_ctx(em_proxying_queue* q,
+                                   pthread_t target_thread,
+                                   void (*func)(em_proxying_ctx*, void*),
+                                   void* arg, proxied_js_func_t* f) {
+  assert(!pthread_equal(target_thread, pthread_self()) &&
+         "Cannot synchronously wait for work proxied to the current thread");
+  em_proxying_ctx ctx;
+  em_proxying_ctx_init_sync(&ctx, func, arg);
+  f->ctx = &ctx;
+  if (!do_proxy(q, target_thread, (task){call_with_ctx, cancel_ctx, &ctx})) {
+    em_proxying_ctx_deinit(&ctx);
+    return 0;
+  }
+  pthread_mutex_lock(&ctx.sync.mutex);
+  while (ctx.sync.state == PENDING) {
+    pthread_cond_wait(&ctx.sync.cond, &ctx.sync.mutex);
+  }
+  pthread_mutex_unlock(&ctx.sync.mutex);
+  int ret = ctx.sync.state == DONE;
+  em_proxying_ctx_deinit(&ctx);
+  return ret;
+}
+
 // Helper for signaling the end of the task after the user function returns.
 static void call_then_finish_task(em_proxying_ctx* ctx, void* arg) {
   task* t = arg;
   t->func(t->arg);
   emscripten_proxy_finish(ctx);
+}
+
+static void call_task(em_proxying_ctx* ctx, void* arg) {
+  task* t = arg;
+  t->func(t->arg);
 }
 
 int emscripten_proxy_sync(em_proxying_queue* q,
@@ -404,6 +444,15 @@ int emscripten_proxy_sync(em_proxying_queue* q,
   task t = {.func = func, .arg = arg};
   return emscripten_proxy_sync_with_ctx(
     q, target_thread, call_then_finish_task, &t);
+}
+
+int emscripten_proxy_promise_await(em_proxying_queue* q,
+                          pthread_t target_thread,
+                          void (*func)(void*),
+                          proxied_js_func_t* f) {
+  task t = {.func = func, .arg = (void*)f};
+  return emscripten_proxy_promise_await_with_ctx(
+    q, target_thread, call_task, &t, f);
 }
 
 static int do_proxy_callback(em_proxying_queue* q,
@@ -583,31 +632,32 @@ em_promise_t emscripten_proxy_promise(em_proxying_queue* q,
                           &block->promise_ctx);
 }
 
-typedef struct proxied_js_func_t {
-  int funcIndex;
-  void* emAsmAddr;
-  pthread_t callingThread;
-  int numArgs;
-  double* argBuffer;
-  double result;
-  bool owned;
-} proxied_js_func_t;
-
 static void run_js_func(void* arg) {
   proxied_js_func_t* f = (proxied_js_func_t*)arg;
   f->result = _emscripten_receive_on_main_thread_js(
-    f->funcIndex, f->emAsmAddr, f->callingThread, f->numArgs, f->argBuffer);
+    f->funcIndex, f->emAsmAddr, f->callingThread, f->numArgs, f->argBuffer, NULL);
   if (f->owned) {
     free(f->argBuffer);
     free(f);
   }
 }
 
+static void run_js_promise_await(void* arg) {
+  proxied_js_func_t* f = (proxied_js_func_t*)arg;
+  f->result = _emscripten_receive_on_main_thread_js(
+    f->funcIndex, f->emAsmAddr, f->callingThread, f->numArgs, f->argBuffer, (void*)f->ctx);
+}
+
+void _emscripten_proxy_promise_finish(void* res, em_proxying_ctx* ctx) {
+  emscripten_proxy_finish(ctx);
+}
+
 double _emscripten_run_on_main_thread_js(int func_index,
                                          void* em_asm_addr,
                                          int num_args,
                                          double* buffer,
-                                         int sync) {
+                                         int sync,
+                                         int promise) {
   proxied_js_func_t f = {
     .funcIndex = func_index,
     .emAsmAddr = em_asm_addr,
@@ -620,9 +670,15 @@ double _emscripten_run_on_main_thread_js(int func_index,
   em_proxying_queue* q = emscripten_proxy_get_system_queue();
   pthread_t target = emscripten_main_runtime_thread_id();
 
-  if (sync) {
+  if (sync && !promise) {
     if (!emscripten_proxy_sync(q, target, run_js_func, &f)) {
       assert(false && "emscripten_proxy_sync failed");
+      return 0;
+    }
+    return f.result;
+  } else if (sync && promise) {
+    if (!emscripten_proxy_promise_await(q, target, run_js_promise_await, &f)) {
+      assert(false && "emscripten_proxy_promise failed");
       return 0;
     }
     return f.result;
