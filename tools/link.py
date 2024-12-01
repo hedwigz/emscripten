@@ -502,6 +502,7 @@ def setup_pthreads():
     'emscripten_main_runtime_thread_id',
     'emscripten_main_thread_process_queued_calls',
     '_emscripten_run_on_main_thread_js',
+    '_emscripten_proxy_promise_finish',
     'emscripten_stack_set_limits',
   ]
 
