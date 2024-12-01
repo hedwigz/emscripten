@@ -1878,6 +1878,13 @@ int main(int argc, char **argv) {
   def test_main_thread_async_em_asm(self, args, force_c=False):
     self.do_core_test('test_main_thread_async_em_asm.cpp', emcc_args=args, force_c=force_c)
 
+  @needs_dylink
+  @parameterized({
+    'pthreads': (['-pthread', '-sPROXY_TO_PTHREAD', '-sEXIT_RUNTIME'], False),
+  })
+  def test_main_thread_async_em_asm_promise_await(self, args, force_c=False):
+    self.do_core_test('test_main_thread_async_em_asm_promise_await.cpp', emcc_args=args, force_c=force_c)
+
   # Tests MAIN_THREAD_EM_ASM_INT() function call with different signatures.
   def test_main_thread_em_asm_signatures(self):
     self.do_core_test('test_em_asm_signatures.cpp', assert_returncode=NON_ZERO)

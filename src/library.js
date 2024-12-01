@@ -1631,7 +1631,7 @@ addToLibrary({
     '$proxyToMainThread'
 #endif
   ],
-  $runMainThreadEmAsm: (emAsmAddr, sigPtr, argbuf, sync) => {
+  $runMainThreadEmAsm: (emAsmAddr, sigPtr, argbuf, sync, promise) => {
     var args = readEmAsmArgs(sigPtr, argbuf);
 #if PTHREADS
     if (ENVIRONMENT_IS_PTHREAD) {
@@ -1644,7 +1644,7 @@ addToLibrary({
       // of using __proxy. (And dor simplicity, do the same in the sync
       // case as well, even though it's not strictly necessary, to keep the two
       // code paths as similar as possible on both sides.)
-      return proxyToMainThread(0, emAsmAddr, sync, ...args);
+      return proxyToMainThread(0, emAsmAddr, sync, promise, ...args);
     }
 #endif
 #if ASSERTIONS
@@ -1653,14 +1653,17 @@ addToLibrary({
     return ASM_CONSTS[emAsmAddr](...args);
   },
   emscripten_asm_const_int_sync_on_main_thread__deps: ['$runMainThreadEmAsm'],
-  emscripten_asm_const_int_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1),
+  emscripten_asm_const_int_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1, 0),
+
+  emscripten_asm_const_int_await_promise_on_main_thread__deps: ['$runMainThreadEmAsm'],
+  emscripten_asm_const_int_await_promise_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1, 1),
 
   emscripten_asm_const_ptr_sync_on_main_thread__deps: ['$runMainThreadEmAsm'],
-  emscripten_asm_const_ptr_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1),
+  emscripten_asm_const_ptr_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1, 0),
 
   emscripten_asm_const_double_sync_on_main_thread: 'emscripten_asm_const_int_sync_on_main_thread',
   emscripten_asm_const_async_on_main_thread__deps: ['$runMainThreadEmAsm'],
-  emscripten_asm_const_async_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 0),
+  emscripten_asm_const_async_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 0, 0),
 #endif
 
 #if !DECLARE_ASM_MODULE_EXPORTS
