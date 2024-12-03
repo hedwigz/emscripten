@@ -689,6 +689,7 @@ def phase_linker_setup(options, state, newargs):
     if not settings.ASSERTIONS:
       exit_with_error('PTHREADS_PROFILING only works with ASSERTIONS enabled')
     options.post_js.append(utils.path_from_root('src/threadprofiler.js'))
+    settings.REQUIRED_EXPORTS.append('emscripten_main_runtime_thread_id')
 
   options.extern_pre_js = read_js_files(options.extern_pre_js)
   options.extern_post_js = read_js_files(options.extern_post_js)
