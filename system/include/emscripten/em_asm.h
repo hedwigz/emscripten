@@ -254,6 +254,11 @@ const char __em_asm_sig_builder<__em_asm_type_tuple<Args...> >::buffer[] = { __e
 // functions.
 #define MAIN_THREAD_EM_ASM(code, ...) ((void)emscripten_asm_const_int_sync_on_main_thread(CODE_EXPR(#code) _EM_ASM_PREP_ARGS(__VA_ARGS__)))
 
+// Runs the given Javascript code on the main browser thread.
+// It must be called from a non-main thread.
+// The code must return a promise, and this function will wait for the promise
+// to resolve or reject, essentially blocking the calling thread until then.
+// In either case the function will return an integer, which is the result of the promise.
 #define MAIN_THREAD_EM_ASM_PROMISE_AWAIT(code, ...) emscripten_asm_const_int_await_promise_on_main_thread(CODE_EXPR(#code) _EM_ASM_PREP_ARGS(__VA_ARGS__))
 
 // Runs the given JavaScript code synchronously on the main browser thread, and
