@@ -1887,7 +1887,7 @@ int main(int argc, char **argv) {
     if '-sPROXY_TO_PTHREAD' not in args:
       # expect runtime to error
       output = self.do_runf('core/test_main_thread_async_em_asm_promise_await.cpp', expected_output=None, assert_returncode=NON_ZERO, emcc_args=args)
-      self.assertContained('is not supported in single-threaded mode', output)
+      self.assertContained('call to emscripten_asm_const_int_await_promise_on_main_thread is only supported from pthread (but was called from main thread)', output)
     else:
       self.do_core_test('test_main_thread_async_em_asm_promise_await.cpp', emcc_args=args, force_c=force_c)
 
