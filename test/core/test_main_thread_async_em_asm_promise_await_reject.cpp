@@ -5,7 +5,6 @@
 
 #include <emscripten.h>
 #include <stdio.h>
-// pthread
 #include <pthread.h>
 
 int main()
