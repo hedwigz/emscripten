@@ -9,16 +9,17 @@
 int main()
 {
   printf("Before MAIN_THREAD_EM_ASM_PROMISE_AWAIT\n");
-  MAIN_THREAD_EM_ASM_PROMISE_AWAIT({
+  int res = MAIN_THREAD_EM_ASM_PROMISE_AWAIT({
     out('Inside MAIN_THREAD_EM_ASM_PROMISE_AWAIT: ' + $0 + ' ' + $1);
     const asyncOp = new Promise((resolve,reject) => {
       setTimeout(() => {
         out('Inside asyncOp');
-        resolve();
+        resolve(2);
       }, 1000);
     });
     return asyncOp;
   }, 42, 3.5);
   printf("After MAIN_THREAD_EM_ASM_PROMISE_AWAIT\n");
+  printf("result: %d\n", res);
   return 0;
 }

@@ -649,6 +649,9 @@ static void run_js_promise_await(void* arg) {
 }
 
 void _emscripten_proxy_promise_finish(void* res, em_proxying_ctx* ctx) {
+  task* t = (task*)ctx->arg;
+  proxied_js_func_t* func = (proxied_js_func_t*)t->arg;
+  func->result = (double)(intptr_t)res;
   emscripten_proxy_finish(ctx);
 }
 

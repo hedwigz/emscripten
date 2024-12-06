@@ -1647,9 +1647,6 @@ addToLibrary({
       return proxyToMainThread(0, emAsmAddr, sync, promise, ...args);
     }
 #endif
-    if (promise) {
-      throw new Error('emscripten_asm_const_int_await_promise_on_main_thread is not supported in single-threaded mode');
-    }
 #if ASSERTIONS
     assert(ASM_CONSTS.hasOwnProperty(emAsmAddr), `No EM_ASM constant found at address ${emAsmAddr}.  The loaded WebAssembly file is likely out of sync with the generated JavaScript.`);
 #endif
@@ -1659,7 +1656,14 @@ addToLibrary({
   emscripten_asm_const_int_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1),
 
   emscripten_asm_const_int_await_promise_on_main_thread__deps: ['$runMainThreadEmAsm'],
-  emscripten_asm_const_int_await_promise_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1, 1),
+  emscripten_asm_const_int_await_promise_on_main_thread: (emAsmAddr, sigPtr, argbuf) => {
+    #if PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) {
+      return runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1, 1);
+    }
+    #endif
+    throw new Error('call to emscripten_asm_const_int_await_promise_on_main_thread is only supported from pthread (but was called from main thread)');
+  },
 
   emscripten_asm_const_ptr_sync_on_main_thread__deps: ['$runMainThreadEmAsm'],
   emscripten_asm_const_ptr_sync_on_main_thread: (emAsmAddr, sigPtr, argbuf) => runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1),
