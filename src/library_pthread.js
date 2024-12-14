@@ -895,7 +895,7 @@ var LibraryPThread = {
 
   $proxyToMainThread__deps: ['$stackSave', '$stackRestore', '$stackAlloc', '_emscripten_run_on_main_thread_js', ...i53ConversionDeps],
   $proxyToMainThread__docs: '/** @type{function(number, (number|boolean), ...number)} */',
-  $proxyToMainThread: (funcIndex, emAsmAddr, sync, promise, ...callArgs) => {
+  $proxyToMainThread: (funcIndex, emAsmAddr, sync, asyncAwait, ...callArgs) => {
     // EM_ASM proxying is done by passing a pointer to the address of the EM_ASM
     // content as `emAsmAddr`.  JS library proxying is done by passing an index
     // into `proxiedJSCallArgs` as `funcIndex`. If `emAsmAddr` is non-zero then
@@ -933,7 +933,7 @@ var LibraryPThread = {
       HEAPF64[b + i] = arg;
 #endif
     }
-    var rtn = __emscripten_run_on_main_thread_js(funcIndex, emAsmAddr, serializedNumCallArgs, args, sync, promise);
+    var rtn = __emscripten_run_on_main_thread_js(funcIndex, emAsmAddr, serializedNumCallArgs, args, sync, asyncAwait);
     stackRestore(sp);
     return rtn;
   },
@@ -987,9 +987,6 @@ var LibraryPThread = {
 #if ASSERTIONS
       assert(!!rtn.then, 'Return value of proxied function expected to be a Promise but got' + rtn);
 #endif
-      if (!rtn.then) {
-        throw new Error('Return value of proxied function expected to be a Promise but got' + rtn);
-      }
       rtn.then(res => {
 #if MEMORY64
     // In memory64 mode some proxied functions return bigint/pointer but
@@ -998,9 +995,9 @@ var LibraryPThread = {
       res = bigintToI53Checked(res);
     }
 #endif
-      __emscripten_proxy_promise_finish(res, promiseCtx);
+      __emscripten_proxy_promise_finish(promiseCtx, res);
       }).catch(err => {
-        __emscripten_proxy_promise_finish(err, promiseCtx);
+        __emscripten_proxy_promise_finish(promiseCtx, err);
       });
       return;
     }
