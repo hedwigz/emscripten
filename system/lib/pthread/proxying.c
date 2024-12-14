@@ -402,7 +402,7 @@ int emscripten_proxy_sync_with_ctx(em_proxying_queue* q,
   return ret;
 }
 
-int emscripten_proxy_promise_await_with_ctx(em_proxying_queue* q,
+int emscripten_proxy_async_await_with_ctx(em_proxying_queue* q,
                                    pthread_t target_thread,
                                    void (*func)(em_proxying_ctx*, void*),
                                    void* arg, proxied_js_func_t* f) {
@@ -446,12 +446,12 @@ int emscripten_proxy_sync(em_proxying_queue* q,
     q, target_thread, call_then_finish_task, &t);
 }
 
-int emscripten_proxy_promise_await(em_proxying_queue* q,
+int emscripten_proxy_async_await(em_proxying_queue* q,
                           pthread_t target_thread,
                           void (*func)(void*),
                           proxied_js_func_t* f) {
   task t = {.func = func, .arg = (void*)f};
-  return emscripten_proxy_promise_await_with_ctx(
+  return emscripten_proxy_async_await_with_ctx(
     q, target_thread, call_task, &t, f);
 }
 
@@ -642,17 +642,10 @@ static void run_js_func(void* arg) {
   }
 }
 
-static void run_js_promise_await(void* arg) {
+static void run_js_async_await(void* arg) {
   proxied_js_func_t* f = (proxied_js_func_t*)arg;
   f->result = _emscripten_receive_on_main_thread_js(
     f->funcIndex, f->emAsmAddr, f->callingThread, f->numArgs, f->argBuffer, (void*)f->ctx);
-}
-
-void _emscripten_proxy_promise_finish(void* res, em_proxying_ctx* ctx) {
-  task* t = (task*)ctx->arg;
-  proxied_js_func_t* func = (proxied_js_func_t*)t->arg;
-  func->result = (double)(intptr_t)res;
-  emscripten_proxy_finish(ctx);
 }
 
 double _emscripten_run_on_main_thread_js(int func_index,
@@ -660,7 +653,7 @@ double _emscripten_run_on_main_thread_js(int func_index,
                                          int num_args,
                                          double* buffer,
                                          int sync,
-                                         int promise) {
+                                         int asyncAwait) {
   proxied_js_func_t f = {
     .funcIndex = func_index,
     .emAsmAddr = em_asm_addr,
@@ -673,15 +666,16 @@ double _emscripten_run_on_main_thread_js(int func_index,
   em_proxying_queue* q = emscripten_proxy_get_system_queue();
   pthread_t target = emscripten_main_runtime_thread_id();
 
-  if (sync && !promise) {
-    if (!emscripten_proxy_sync(q, target, run_js_func, &f)) {
+  // make sure it is not the case that sync==false and asyncAwait==true
+  assert(!(sync == 0 && asyncAwait == 1) && "asyncAwait cannot be true if sync is false");
+  if (sync) {
+    if (asyncAwait) {
+      if (!emscripten_proxy_async_await(q, target, run_js_async_await, &f)) {
+        assert(false && "emscripten_proxy_promise failed");
+        return 0;
+      }
+    } else if (!emscripten_proxy_sync(q, target, run_js_func, &f)) {
       assert(false && "emscripten_proxy_sync failed");
-      return 0;
-    }
-    return f.result;
-  } else if (sync && promise) {
-    if (!emscripten_proxy_promise_await(q, target, run_js_promise_await, &f)) {
-      assert(false && "emscripten_proxy_promise failed");
       return 0;
     }
     return f.result;
@@ -700,4 +694,11 @@ double _emscripten_run_on_main_thread_js(int func_index,
     assert(false && "emscripten_proxy_async failed");
   }
   return 0;
+}
+
+void _emscripten_proxy_promise_finish(em_proxying_ctx* ctx, void* res) {
+  task* t = (task*)ctx->arg;
+  proxied_js_func_t* func = (proxied_js_func_t*)t->arg;
+  func->result = (double)(intptr_t)res;
+  emscripten_proxy_finish(ctx);
 }
