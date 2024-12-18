@@ -44,6 +44,9 @@ typedef struct proxied_js_func_t {
   double* argBuffer;
   double result;
   bool owned;
+  // Only used when when the underlying JS function is async and ctx need to be 
+  // resolved on promise end.
+  // should be NULL if the function is sync.
   em_proxying_ctx * ctx;
 } proxied_js_func_t;
 
@@ -410,6 +413,7 @@ static void call_then_finish_task(em_proxying_ctx* ctx, void* arg) {
 }
 
 static void call_proxied_js_task_with_ctx(em_proxying_ctx* ctx, void* arg) {
+  // Stash the context on the proxied_js_func_t argument.
   task* t = arg;
   proxied_js_func_t* p = t->arg;
   p->ctx = ctx;
@@ -624,6 +628,7 @@ double _emscripten_run_on_main_thread_js(int func_index,
     .numArgs = num_args,
     .argBuffer = buffer,
     .owned = false,
+    .ctx = NULL,
   };
 
   em_proxying_queue* q = emscripten_proxy_get_system_queue();
