@@ -499,10 +499,6 @@ def setup_pthreads():
   settings.REQUIRED_EXPORTS += [
     '_emscripten_thread_free_data',
     '_emscripten_thread_crashed',
-    'emscripten_main_runtime_thread_id',
-    'emscripten_main_thread_process_queued_calls',
-    '_emscripten_run_on_main_thread_js',
-    '_emscripten_await_on_main_thread_js',
     '_emscripten_proxy_promise_finish',
   ]
 

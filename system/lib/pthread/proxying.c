@@ -13,7 +13,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #include "em_task_queue.h"
 #include "thread_mailbox.h"
@@ -35,17 +34,6 @@ static em_proxying_queue system_proxying_queue = {
   .size = 0,
   .capacity = 0,
 };
-
-typedef struct proxied_js_func_t {
-  int funcIndex;
-  void* emAsmAddr;
-  pthread_t callingThread;
-  int numArgs;
-  double* argBuffer;
-  double result;
-  bool owned;
-  em_proxying_ctx * ctx;
-} proxied_js_func_t;
 
 em_proxying_queue* emscripten_proxy_get_system_queue(void) {
   return &system_proxying_queue;
@@ -409,13 +397,6 @@ static void call_then_finish_task(em_proxying_ctx* ctx, void* arg) {
   emscripten_proxy_finish(ctx);
 }
 
-static void call_proxied_js_task_with_ctx(em_proxying_ctx* ctx, void* arg) {
-  task* t = arg;
-  proxied_js_func_t* p = t->arg;
-  p->ctx = ctx;
-  t->func(t->arg);
-}
-
 int emscripten_proxy_sync(em_proxying_queue* q,
                           pthread_t target_thread,
                           void (*func)(void*),
@@ -602,6 +583,19 @@ em_promise_t emscripten_proxy_promise(em_proxying_queue* q,
                           &block->promise_ctx);
 }
 
+typedef struct proxied_js_func_t {
+  int funcIndex;
+  void* emAsmAddr;
+  pthread_t callingThread;
+  int numArgs;
+  double* argBuffer;
+  double result;
+  bool owned;
+  // Only used when the underlying js func is async.
+  // Can be null when the function is sync.
+  em_proxying_ctx * ctx;
+} proxied_js_func_t;
+
 static void run_js_func(void* arg) {
   proxied_js_func_t* f = (proxied_js_func_t*)arg;
   f->result = _emscripten_receive_on_main_thread_js(
@@ -624,6 +618,7 @@ double _emscripten_run_on_main_thread_js(int func_index,
     .numArgs = num_args,
     .argBuffer = buffer,
     .owned = false,
+    .ctx = NULL,
   };
 
   em_proxying_queue* q = emscripten_proxy_get_system_queue();
@@ -650,6 +645,13 @@ double _emscripten_run_on_main_thread_js(int func_index,
     assert(false && "emscripten_proxy_async failed");
   }
   return 0;
+}
+
+static void call_proxied_js_task_with_ctx(em_proxying_ctx* ctx, void* arg) {
+  task* t = arg;
+  proxied_js_func_t* p = t->arg;
+  p->ctx = ctx;
+  t->func(t->arg);
 }
 
 double _emscripten_await_on_main_thread_js(int func_index,
