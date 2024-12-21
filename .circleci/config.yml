@@ -419,12 +419,14 @@ jobs:
       - run: make -C site text
       - run: tools/maint/check_emcc_help_text.py
       - run: make -C site html
-  flake8:
+  ruff:
     executor: bionic
     steps:
       - checkout
       - pip-install
-      - run: python3 -m flake8 --show-source --statistics
+      - run: ruff check
+      # TODO (cclauss): When ruff supports rule E303 without --preview, remove following line
+      - run: ruff check --preview --select=E303
   mypy:
     executor: bionic
     steps:
@@ -970,7 +972,7 @@ jobs:
 workflows:
   build-test:
     jobs:
-      - flake8
+      - ruff
       - mypy
       - eslint
       - build-docs
