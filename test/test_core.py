@@ -1890,7 +1890,7 @@ int main(int argc, char **argv) {
       self.assertContained('emscripten_asm_const_int_await_on_main_thread is not available on the main thread', output)
     else:
       self.do_core_test('test_main_thread_async_em_asm_await.cpp', emcc_args=args, force_c=force_c)
-  
+
   @needs_dylink
   @parameterized({
     'pthreads': (['-pthread', '-sPROXY_TO_PTHREAD', '-sEXIT_RUNTIME', '-sASSERTIONS'], False),
